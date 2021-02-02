@@ -141,6 +141,7 @@ namespace Windows.UI.Xaml.Controls
 
 		// Invalidate _ellipsize
 		partial void OnTextTrimmingChangedPartial() => _ellipsize = null;
+		partial void OnMaxLinesChangedPartial() => _ellipsize = null;
 
 		// Invalidate _layoutAlignment
 		partial void OnTextAlignmentChangedPartial() => _layoutAlignment = null;
@@ -335,7 +336,7 @@ namespace Windows.UI.Xaml.Controls
 				var isSameWidth = _measureLayout.AvailableSize.Width == arrangeSize.Width;
 
 				// If the requested height is the same
-				var isSameHeight = _measureLayout.AvailableSize.Height == arrangeSize.Width;
+				var isSameHeight = _measureLayout.AvailableSize.Height == arrangeSize.Height;
 
 				// If the measured height is exactly the same
 				var isSameMeasuredHeight = _measureLayout.MeasuredSize.Height == arrangeSize.Height;
@@ -396,7 +397,7 @@ namespace Windows.UI.Xaml.Controls
 			var newLayout = new LayoutBuilder(
 				_textFormatted,
 				_paint,
-				_ellipsize,
+				IsLayoutConstrainedByMaxLines ? TruncateEnd : _ellipsize, // .SetMaxLines() won't work on Android unless the ellipsize "END" is used.
 				_layoutAlignment,
 				TextWrapping,
 				MaxLines,
@@ -581,7 +582,7 @@ namespace Windows.UI.Xaml.Controls
 
 				var shouldRemoveUnfitLines = _ellipsize != null;
 
-				if (shouldRemoveUnfitLines && maxHeight != null && measuredHeight >= maxHeight)
+				if (shouldRemoveUnfitLines && maxHeight != null && measuredHeight > maxHeight)
 				{
 					var lineAtHeight = Layout.GetLineForOffset(maxHeight.Value) + 1;
 					measuredHeight = Layout.GetLineTop(lineAtHeight);
@@ -706,13 +707,10 @@ namespace Windows.UI.Xaml.Controls
 				}
 				else
 				{
-					// .SetMaxLines() won't work on Android unless the ellipsize "END" is used.
-					var ellipsize = _maxLines > 0 && _ellipsize == null ? TextUtils.TruncateAt.End : _ellipsize;
-
 					Layout = StaticLayout.Builder.Obtain(_textFormatted, 0, _textFormatted.Length(), _paint, width)
 					.SetLineSpacing(_addedSpacing = GetSpacingAdd(_paint), 1)
 					.SetMaxLines(maxLines)
-					.SetEllipsize(ellipsize)
+					.SetEllipsize(_ellipsize)
 					.SetEllipsizedWidth(width)
 					.SetAlignment(_layoutAlignment)
 					.SetIncludePad(true)

@@ -26,7 +26,7 @@ using Window = System.Windows.Window;
 
 namespace Uno.UI.Skia.Platform
 {
-	public class WpfDragDropExtension : IDragDropExtension
+	internal class WpfDragDropExtension : IDragDropExtension
 	{
 		private readonly long _fakePointerId = Pointer.CreateUniqueIdForUnknownPointer();
 		private readonly DragDropManager _manager;
@@ -289,7 +289,7 @@ namespace Uno.UI.Skia.Platform
 				if (relativeTo is UIElement elt)
 				{
 					var eltToRoot = UIElement.GetTransform(elt, null);
-					Matrix3x2.Invert(eltToRoot, out var rootToElt);
+					var rootToElt = eltToRoot.Inverse();
 
 					return rootToElt.Transform(rawPosition);
 				}

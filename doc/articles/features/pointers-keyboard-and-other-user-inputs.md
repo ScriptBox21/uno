@@ -55,6 +55,7 @@ Notes:
      > won't work for keyboard events. **They won't bubble in managed code**.
    * **iOS**: `KeyDown` & `KeyUp` routed events are generated from only a `TextBox`. Only character-related keyboard events are generated.
      They are implemented as _Routed Events_ and they are **always bubbling in managed code**.
+   * **Skia**: Keyboard events are supported from `CoreWindow.KeyUp` and `CoreWindow.KeyDown` events, as well as `UIElement.KeyUp` and `UIElement.KeyDown` events for GTK, WPF and Tizen.
 
 ## Pointer Events
 
@@ -70,7 +71,7 @@ On Skia however, they are fully managed events.
 
 Like on WinUI as soon as the system detects that the user wants to scroll, a control gets a `PointerCancelled` and that control won't receive
 any other pointer event until the user releases the pointer. That behavior can be prevented by setting the `ManipulationMode` 
-to something else than `System` on a control nested in the `ScrollViewer`. (cf. [Manipulation events](#Manipulation_Events))
+to something else than `System` on a control nested in the `ScrollViewer`. (cf. [Manipulation events](#manipulation-events))
 
 Be aware that on iOS this will set `DelaysContentTouches` to `false` so it means that it will slightly reduce the performance
 of the scrolling (cf. [documentation](https://developer.apple.com/documentation/uikit/uiscrollview/1619398-delayscontenttouches)).

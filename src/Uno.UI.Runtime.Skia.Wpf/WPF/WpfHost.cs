@@ -1,4 +1,6 @@
-﻿using SkiaSharp;
+﻿#nullable enable
+
+using SkiaSharp;
 using System;
 using System.ComponentModel;
 using System.Linq;
@@ -22,7 +24,7 @@ namespace Uno.UI.Skia.Platform
 
 		static WpfHost()
 		{
-			ApiExtensibility.Register(typeof(Windows.UI.Core.ICoreWindowExtension), o => new WpfUIElementPointersSupport(o));
+			ApiExtensibility.Register(typeof(Windows.UI.Core.ICoreWindowExtension), o => new WpfCoreWindowExtension(o));
 			ApiExtensibility.Register(typeof(Windows.UI.ViewManagement.IApplicationViewExtension), o => new WpfApplicationViewExtension(o));
 			ApiExtensibility.Register(typeof(ISystemThemeHelperExtension), o => new WpfSystemThemeHelperExtension(o));
 			ApiExtensibility.Register(typeof(IDisplayInformationExtension), o => new WpfDisplayInformationExtension(o));
@@ -55,8 +57,8 @@ namespace Uno.UI.Skia.Platform
 				app.Host = this;
 			}
 
-			Windows.UI.Core.CoreDispatcher.DispatchOverride
-				= d => dispatcher.BeginInvoke(d);
+			Windows.UI.Core.CoreDispatcher.DispatchOverride = d => dispatcher.BeginInvoke(d);
+			Windows.UI.Core.CoreDispatcher.HasThreadAccessOverride = dispatcher.CheckAccess;
 
 			WinUI.Application.Start(CreateApp, args);
 
