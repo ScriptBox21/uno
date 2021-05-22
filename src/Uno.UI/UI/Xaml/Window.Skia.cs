@@ -58,7 +58,8 @@ namespace Windows.UI.Xaml
 			{
 				_renderQueued = true;
 
-				CoreDispatcher.Main.RunAsync(CoreDispatcherPriority.Normal, () => {
+				CoreDispatcher.Main.RunAsync(CoreDispatcherPriority.Normal, () =>
+				{
 					_renderQueued = false;
 					InvalidateRender();
 				});
@@ -81,7 +82,8 @@ namespace Windows.UI.Xaml
 				{
 					_isMeasureQueued = true;
 
-					CoreDispatcher.Main.RunAsync(CoreDispatcherPriority.Normal, () => {
+					CoreDispatcher.Main.RunAsync(CoreDispatcherPriority.Normal, () =>
+					{
 						try
 						{
 							_isMeasureQueued = false;
@@ -142,14 +144,17 @@ namespace Windows.UI.Xaml
 			{
 				_rootBorder = new Border();
 				_popupRoot = new PopupRoot();
+				FocusVisualLayer = new Canvas();
 
 				_window = new Grid
 				{
+					IsVisualTreeRoot = true,
 					Children =
 					{
 						_rootBorder,
-						_popupRoot
+						_popupRoot,						
 						// Message Dialog => Those are currently using Popup, but they be upper
+						FocusVisualLayer
 						// Drag and drop => Those are added only when needed (they are actually not part of the WinUI visual tree and would have a negative perf impact)
 					}
 				};

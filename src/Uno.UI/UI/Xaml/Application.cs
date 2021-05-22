@@ -25,13 +25,13 @@ using Font = Android.Graphics.Typeface;
 using Android.Graphics;
 using DependencyObject = System.Object;
 #elif XAMARIN_IOS
-using View = UIKit.UIView;	
-using ViewGroup = UIKit.UIView;	
-using UIKit;	
+using View = UIKit.UIView;
+using ViewGroup = UIKit.UIView;
+using UIKit;
 #elif __MACOS__
-using View = AppKit.NSView;	
-using ViewGroup = AppKit.NSView;	
-using AppKit;	
+using View = AppKit.NSView;
+using ViewGroup = AppKit.NSView;
+using AppKit;
 #else
 using View = Windows.UI.Xaml.UIElement;
 using ViewGroup = Windows.UI.Xaml.UIElement;
@@ -46,13 +46,17 @@ namespace Windows.UI.Xaml
 		private bool _themeSetExplicitly = false;
 		private ApplicationTheme? _requestedTheme;
 		private bool _systemThemeChangesObserved = false;
-		private string _requestedThemeForResources;
+		private SpecializedResourceDictionary.ResourceKey _requestedThemeForResources;
 
 		static Application()
 		{
 			ApiInformation.RegisterAssembly(typeof(Application).Assembly);
 			ApiInformation.RegisterAssembly(typeof(Windows.Storage.ApplicationData).Assembly);
+
+			InitializePartialStatic();
 		}
+
+		static partial void InitializePartialStatic();
 
 		[Preserve]
 		public static class TraceProvider
@@ -110,6 +114,8 @@ namespace Windows.UI.Xaml
 			set
 			{
 				_requestedTheme = value;
+				// Sync with core application's theme
+				CoreApplication.RequestedTheme = value == ApplicationTheme.Dark ? SystemTheme.Dark : SystemTheme.Light;
 				UpdateRequestedThemesForResources();
 			}
 		}
@@ -126,7 +132,7 @@ namespace Windows.UI.Xaml
 				};
 		}
 
-		internal string RequestedThemeForResources
+		internal SpecializedResourceDictionary.ResourceKey RequestedThemeForResources
 		{
 			get
 			{
@@ -134,7 +140,11 @@ namespace Windows.UI.Xaml
 				return _requestedThemeForResources;
 			}
 
-			private set => _requestedThemeForResources = value;
+			private set
+			{
+				_requestedThemeForResources = value;
+				ResourceDictionary.SetActiveTheme(value);
+			}
 		}
 
 		internal ElementTheme ActualElementTheme => (_themeSetExplicitly, RequestedTheme) switch
@@ -268,7 +278,7 @@ namespace Windows.UI.Xaml
 
 		private void OnRequestedThemeChanged()
 		{
-			if (GetTreeRoot() is FrameworkElement root)
+			if (GetTreeRoot() is { } root)
 			{
 				// Update theme bindings in application resources
 				Resources?.UpdateThemeBindings();
@@ -279,43 +289,46 @@ namespace Windows.UI.Xaml
 				PropagateThemeChanged(root);
 			}
 
-			void PropagateThemeChanged(object instance)
+			// Start from the real root, which may not be a FrameworkElement on some platforms
+			View GetTreeRoot()
 			{
-
-				// Update ThemeResource references that have changed
-				if (instance is FrameworkElement fe)
-				{
-					fe.UpdateThemeBindings();
-				}
-
-				//Try Panel.Children before ViewGroup.GetChildren - this results in fewer allocations
-				if (instance is Controls.Panel p)
-				{
-					foreach (object o in p.Children)
-					{
-						PropagateThemeChanged(o);
-					}
-				}
-				else if (instance is ViewGroup g)
-				{
-					foreach (object o in g.GetChildren())
-					{
-						PropagateThemeChanged(o);
-					}
-				}
-			}
-
-			// On some platforms, the user-set root is not the topmost FrameworkElement
-			FrameworkElement GetTreeRoot()
-			{
-				var current = Windows.UI.Xaml.Window.Current.Content as FrameworkElement;
+				View current = Windows.UI.Xaml.Window.Current.Content;
 				var parent = current?.GetVisualTreeParent();
-				while (parent is FrameworkElement feParent)
+				while (parent != null)
 				{
-					current = feParent;
+					current = parent;
 					parent = current?.GetVisualTreeParent();
 				}
 				return current;
+			}
+		}
+
+		/// <summary>
+		/// Propagate theme changed to <paramref name="instance"/> and its descendants, to have them update any theme bindings.
+		/// </summary>
+		internal static void PropagateThemeChanged(object instance)
+		{
+
+			// Update ThemeResource references that have changed
+			if (instance is FrameworkElement fe)
+			{
+				fe.UpdateThemeBindings();
+			}
+
+			//Try Panel.Children before ViewGroup.GetChildren - this results in fewer allocations
+			if (instance is Controls.Panel p)
+			{
+				foreach (object o in p.Children)
+				{
+					PropagateThemeChanged(o);
+				}
+			}
+			else if (instance is ViewGroup g)
+			{
+				foreach (object o in g.GetChildren())
+				{
+					PropagateThemeChanged(o);
+				}
 			}
 		}
 	}

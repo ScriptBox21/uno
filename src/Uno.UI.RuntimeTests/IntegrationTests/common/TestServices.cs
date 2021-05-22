@@ -73,6 +73,50 @@ namespace Private.Infrastructure
 				}
 			}
 
+			internal static async Task WaitForRelayouted(FrameworkElement frameworkElement)
+			{
+				var isRelayouted = false;
+
+				void OnLayoutUpdated(object _, object __)
+				{
+					frameworkElement.LayoutUpdated -= OnLayoutUpdated;
+					isRelayouted = true;
+				}
+
+				frameworkElement.LayoutUpdated += OnLayoutUpdated;
+
+				await WaitFor(() => isRelayouted, message: $"{frameworkElement} re-layouted");
+			}
+
+			internal static async Task WaitForEqual(double expected, Func<double> actualFunc, double tolerance = 1.0, int timeoutMS = 1000)
+			{
+				if (actualFunc is null)
+				{
+					throw new ArgumentNullException(nameof(actualFunc));
+				}
+
+				var actual = actualFunc();
+				if (ApproxEquals(actual))
+				{
+					return;
+				}
+
+				var stopwatch = Stopwatch.StartNew();
+				while (stopwatch.ElapsedMilliseconds < timeoutMS)
+				{
+					await WaitForIdle();
+					actual = actualFunc();
+					if (ApproxEquals(actual))
+					{
+						return;
+					}
+				}
+
+				throw new AssertFailedException($"Timed out waiting for equality condition to be met. Expected {expected} but last received value was {actual}.");
+
+				bool ApproxEquals(double actualValue) => Math.Abs(expected - actualValue) < tolerance;
+			}
+
 			/// <summary>
 			/// Wait until a specified <paramref name="condition"/> is met. 
 			/// </summary>
@@ -95,6 +139,75 @@ namespace Private.Infrastructure
 				}
 
 				message ??= $"{callerMemberName}():{lineNumber}";
+
+				throw new AssertFailedException("Timed out waiting for condition to be met. " + message);
+			}
+
+			internal static async Task WaitFor<T>(
+				Func<T> condition,
+				T expected,
+				Func<T, string> messageBuilder = null,
+				Func<T, T, bool> comparer = null,
+				int timeoutMS = 1000,
+				[CallerMemberName] string callerMemberName = null,
+				[CallerLineNumber] int lineNumber = 0)
+			{
+				comparer ??= (v1, v2) => Equals(v1, v2);
+
+				T value = condition();
+				if (comparer(value, expected))
+				{
+					return;
+				}
+
+				var stopwatch = Stopwatch.StartNew();
+				while (stopwatch.ElapsedMilliseconds < timeoutMS)
+				{
+					await WaitForIdle();
+					value = condition();
+					if (comparer(value, expected))
+					{
+						return;
+					}
+				}
+
+				var customMsg = messageBuilder != null ? messageBuilder(value) : $"Got {value}, expected {expected}";
+				var message = $"{callerMemberName}():{lineNumber} {customMsg}";
+
+				throw new AssertFailedException("Timed out waiting for condition to be met. " + message);
+			}
+
+			internal static async Task<T> WaitForNonNull<T>(
+				Func<T> getT,
+				int timeoutMS = 1000,
+				string message = null,
+				[CallerMemberName] string callerMemberName = null,
+				[CallerLineNumber] int lineNumber = 0)
+				where T : class
+			{
+				if (getT is null)
+				{
+					throw new ArgumentNullException(nameof(getT));
+				}
+
+				if (getT() is { } t)
+				{
+					return t;
+				}
+
+				var stopwatch = Stopwatch.StartNew();
+				while (stopwatch.ElapsedMilliseconds < timeoutMS)
+				{
+					await WaitForIdle();
+
+
+					if (getT() is { } t2)
+					{
+						return t2;
+					}
+				}
+
+				message ??= $"{callerMemberName}():{lineNumber} Never received non-null value";
 
 				throw new AssertFailedException("Timed out waiting for condition to be met. " + message);
 			}

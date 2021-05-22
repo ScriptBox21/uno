@@ -7,6 +7,8 @@ using System.Runtime.Versioning;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using FluentAssertions;
+using FluentAssertions.Execution;
 using NUnit.Framework;
 using SamplesApp.UITests.TestFramework;
 using Uno.UITest.Helpers;
@@ -15,7 +17,7 @@ using Uno.UITest.Helpers.Queries;
 namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.ScrollViewerTests
 {
 	[TestFixture]
-	public class UnoSamples_Tests : SampleControlUITestBase
+	public partial class UnoSamples_Tests : SampleControlUITestBase
 	{
 		[Test]
 		[AutoRetry]
@@ -117,6 +119,65 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.ScrollViewerTests
 				var scrn = TakeScreenshot(description);
 				ImageAssert.HasColorAt(scrn, rect.CenterX, rect.CenterY, color);
 			}
+		}
+
+		[Test]
+		[AutoRetry]
+		public void ScrollViewer_Margin()
+		{
+			Run("UITests.Windows_UI_Xaml_Controls.ScrollViewerTests.ScrollViewer_Margin");
+
+			_app.Marked("size").SetDependencyPropertyValue("Value", "80");
+
+			_app.WaitForElement("ctl5");
+
+			using var screenshot = TakeScreenshot("test", ignoreInSnapshotCompare: true);
+
+			for(byte i=1; i<=5; i++)
+			{
+				using var _ = new AssertionScope();
+
+				var logicalRect = _app.GetLogicalRect($"ctl{i}");
+				logicalRect.Width.Should().Be(80);
+				logicalRect.Height.Should().Be(80);
+
+				var physicalRect = _app.GetPhysicalRect($"ctl{i}");
+
+				ImageAssert.HasColorAt(screenshot, physicalRect.CenterX, physicalRect.CenterY, Color.Red);
+				ImageAssert.HasColorAt(screenshot, physicalRect.X + 5, physicalRect.Y + 5, Color.Orange);
+				ImageAssert.HasColorAt(screenshot, physicalRect.Right - 5, physicalRect.Y + 5, Color.Orange);
+				ImageAssert.HasColorAt(screenshot, physicalRect.X + 5, physicalRect.Bottom - 5, Color.Orange);
+				ImageAssert.HasColorAt(screenshot, physicalRect.Right - 5, physicalRect.Bottom - 5, Color.Orange);
+
+			}
+		}
+
+		[Test]
+		[AutoRetry]
+		[ActivePlatforms(Platform.Browser)] // Only applicable for mouse input since we're testing mouse-over state
+		public void ScrollViewer_Fluent_ScrollBar_Appears()
+		{
+			Run("UITests.Windows_UI_Xaml_Controls.ScrollViewerTests.ScrollViewer_Fluent");
+
+			_app.WaitForElement("ScrollViewerVisibilityCheckBox");
+
+			_app.FastTap("ScrollViewerVisibilityCheckBox");
+
+			_app.WaitForText("ScrollViewerVisibilityTextBlock", "True");
+
+			var rect = _app.GetPhysicalRect("HostBorder");
+
+			using var noScrollIndicator = TakeScreenshot("No scroll indicators");
+
+			_app.FastTap("ButtonInScrollViewer"); // Put pointer over ScrollViewer so scroll bars appear
+
+			_app.WaitForText("ButtonStatusTextBlock", "Clicked");
+
+			using var scrollIndicator = TakeScreenshot("Scroll indicators visible"); // If this takes a *really* long time the scroll indicators might have
+																			   // disappeared already... hopefully that doesn't happen
+
+			ImageAssert.AreNotEqual(noScrollIndicator, scrollIndicator, rect);
+
 		}
 	}
 }

@@ -142,7 +142,7 @@ namespace Windows.UI.Xaml
 		/// </summary>
 		private bool TryGetParentUIElementForTransformToVisual(out UIElement parentElement, ref double offsetX, ref double offsetY)
 		{
-			var parent = this.GetParent();
+			var parent = this.GetVisualTreeParent();
 			switch (parent)
 			{
 				// First we try the direct parent, if it's from the known type we won't even have to adjust offsets
@@ -158,7 +158,7 @@ namespace Windows.UI.Xaml
 				case UIView view:
 					do
 					{
-						parent = parent.GetParent();
+						parent = parent.GetVisualTreeParent();
 
 						switch (parent)
 						{
@@ -166,11 +166,13 @@ namespace Windows.UI.Xaml
 								// We found a UIElement in the parent hierarchy, we compute the X/Y offset between the
 								// first parent 'view' and this 'elt', and return it.
 
-								if (view is UICollectionView)
+								if (view is UICollectionView || view is NativeScrollContentPresenter)
 								{
 									// The UICollectionView (ListView) will include the scroll offset when converting point to coordinates
 									// space of the parent, but the same scroll offset will be applied by the parent ScrollViewer.
 									// So as it's not expected to have any transform/margins/etc., we compute offset directly from its parent.
+
+									// The same logic applies to NativeScrollContentPresenter, since the ScrollViewer offsets will be explicitly taken into account.
 
 									view = view.Superview;
 								}
@@ -194,12 +196,6 @@ namespace Windows.UI.Xaml
 								return false;
 						}
 					} while (true);
-
-				default:
-					Application.Current.RaiseRecoverableUnhandledException(new InvalidOperationException("Found a parent which is NOT a UIView."));
-
-					parentElement = null;
-					return false;
 			}
 		}
 

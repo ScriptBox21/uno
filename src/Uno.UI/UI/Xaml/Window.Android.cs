@@ -53,14 +53,17 @@ namespace Windows.UI.Xaml
 					Visibility = Visibility.Collapsed
 				};
 				_popupRoot = new PopupRoot();
+				FocusVisualLayer = new Canvas();
 
 				_main = new Grid()
 				{
+					IsVisualTreeRoot = true,
 					Children =
 					{
 						_rootBorder,
 						_fullWindow,
-						_popupRoot
+						_popupRoot,
+						FocusVisualLayer
 					}
 				};
 

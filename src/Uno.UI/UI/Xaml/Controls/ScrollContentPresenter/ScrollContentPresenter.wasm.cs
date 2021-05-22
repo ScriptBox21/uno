@@ -15,10 +15,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Windows.UI.Xaml.Controls
 {
-	public partial class ScrollContentPresenter : ContentPresenter
+	public partial class ScrollContentPresenter : ContentPresenter, IScrollContentPresenter
 	{
 		private ScrollBarVisibility _verticalScrollBarVisibility;
-		private ScrollBarVisibility _horizotalScrollBarVisibility;
+		private ScrollBarVisibility _horizontalScrollBarVisibility;
+		private bool _eventsRegistered;
 
 		internal Size ScrollBarSize
 		{
@@ -32,13 +33,29 @@ namespace Windows.UI.Xaml.Controls
 
 		public ScrollContentPresenter()
 		{
-			PointerReleased += ScrollViewer_PointerReleased;
-			PointerPressed += ScrollViewer_PointerPressed;
-			PointerCanceled += ScrollContentPresenter_PointerCanceled;
-			PointerMoved += ScrollContentPresenter_PointerMoved;
-			PointerEntered += ScrollContentPresenter_PointerEntered;
-			PointerExited += ScrollContentPresenter_PointerExited;
-			PointerWheelChanged += ScrollContentPresenter_PointerWheelChanged;
+		}
+
+		private void TryRegisterEvents(ScrollBarVisibility visibility)
+		{
+
+			if (
+				!_eventsRegistered
+				&& (visibility == ScrollBarVisibility.Auto || visibility == ScrollBarVisibility.Visible))
+			{
+				// Those events are only needed when native scrollbars are used, in order to handle
+				// pointer events on the native scrolbars themselves. See HandlePointerEvent for
+				// more details.
+
+				_eventsRegistered = true;
+
+				PointerReleased += ScrollViewer_PointerReleased;
+				PointerPressed += ScrollViewer_PointerPressed;
+				PointerCanceled += ScrollContentPresenter_PointerCanceled;
+				PointerMoved += ScrollContentPresenter_PointerMoved;
+				PointerEntered += ScrollContentPresenter_PointerEntered;
+				PointerExited += ScrollContentPresenter_PointerExited;
+				PointerWheelChanged += ScrollContentPresenter_PointerWheelChanged;
+			}
 		}
 
 		private void ScrollContentPresenter_PointerWheelChanged(object sender, Input.PointerRoutedEventArgs e)
@@ -79,8 +96,8 @@ namespace Windows.UI.Xaml.Controls
 				return;
 			}
 
-			// The events coming from the scrollbars are bubbled up
-			// to the parents, as those are not (yet) XAML elements.
+			// The events coming from the native scrollbars are bubbled up
+			// to the parents, as those are not XAML elements.
 			// This can cause issues for popups with scrollable content and
 			// light dismiss patterns.
 			var position = e.GetCurrentPoint(this).Position;
@@ -93,37 +110,51 @@ namespace Windows.UI.Xaml.Controls
 			}
 		}
 
-		public float MinimumZoomScale { get; private set; }
-
-		public float MaximumZoomScale { get; private set; }
-
 		private static readonly string[] VerticalVisibilityClasses = { "scroll-y-auto", "scroll-y-disabled", "scroll-y-hidden", "scroll-y-visible" };
 
-		public ScrollBarVisibility VerticalScrollBarVisibility
+		ScrollBarVisibility IScrollContentPresenter.VerticalScrollBarVisibility { get => VerticalScrollBarVisibility; set => VerticalScrollBarVisibility = value; }
+		internal ScrollBarVisibility VerticalScrollBarVisibility
 		{
-			get { return _verticalScrollBarVisibility; }
+			get => _verticalScrollBarVisibility;
 			set
 			{
 				if (_verticalScrollBarVisibility != value)
 				{
 					_verticalScrollBarVisibility = value;
 					SetClasses(VerticalVisibilityClasses, (int)value);
+
+					TryRegisterEvents(value);
 				}
 			}
 		}
 		private static readonly string[] HorizontalVisibilityClasses = { "scroll-x-auto", "scroll-x-disabled", "scroll-x-hidden", "scroll-x-visible" };
 
-		public ScrollBarVisibility HorizontalScrollBarVisibility
+		ScrollBarVisibility IScrollContentPresenter.HorizontalScrollBarVisibility { get => HorizontalScrollBarVisibility; set => HorizontalScrollBarVisibility = value; }
+		internal ScrollBarVisibility HorizontalScrollBarVisibility
 		{
-			get { return _horizotalScrollBarVisibility; }
+			get => _horizontalScrollBarVisibility;
 			set
 			{
-				if (_horizotalScrollBarVisibility != value)
+				if (_horizontalScrollBarVisibility != value)
 				{
-					_horizotalScrollBarVisibility = value;
+					_horizontalScrollBarVisibility = value;
 					SetClasses(HorizontalVisibilityClasses, (int)value);
+
+					TryRegisterEvents(value);
 				}
 			}
+		}
+
+		public bool CanHorizontallyScroll
+		{
+			get => HorizontalScrollBarVisibility != ScrollBarVisibility.Disabled;
+			set { }
+		}
+
+		public bool CanVerticallyScroll
+		{
+			get => VerticalScrollBarVisibility != ScrollBarVisibility.Disabled;
+			set { }
 		}
 
 		private protected override void OnLoaded()
@@ -184,5 +215,9 @@ namespace Windows.UI.Xaml.Controls
 				isIntermediate
 			);
 		}
+
+		void IScrollContentPresenter.OnMinZoomFactorChanged(float newValue) { }
+
+		void IScrollContentPresenter.OnMaxZoomFactorChanged(float newValue) { }
 	}
 }

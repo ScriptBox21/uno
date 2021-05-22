@@ -1,6 +1,7 @@
-# How to host a WebAssembly App
+# Hosting a WebAssembly App
 
 - WASM Web Server Configuration
+  - [Azure Static WebApps](guides/azure-static-webapps.md)
   - [Nginx](#nginx)
   - [Apache](#apache)
 

@@ -1,6 +1,7 @@
 ﻿#if !__NETSTD_REFERENCE__
 using Windows.Foundation;
 using System;
+using System.Diagnostics;
 using Windows.UI.Xaml.Controls.Primitives;
 
 namespace Windows.UI.Xaml
@@ -97,11 +98,37 @@ namespace Windows.UI.Xaml
 				return;
 			}
 
+			if (IsVisualTreeRoot)
+			{
+				try
+				{
+					_isLayoutingVisualTreeRoot = true;
+					DoMeasure(availableSize);
+				}
+				finally
+				{
+					_isLayoutingVisualTreeRoot = false;
+				}
+			}
+			else
+			{
+				// If possible we avoid the try/finally which might be costly on some platforms
+				DoMeasure(availableSize);
+			}
+		}
+
+		private void DoMeasure(Size availableSize)
+		{
 			InvalidateArrange();
 
 			MeasureCore(availableSize);
 			LayoutInformation.SetAvailableSize(this, availableSize);
 			_isMeasureValid = true;
+		}
+
+		internal virtual void MeasureCore(Size availableSize)
+		{
+			throw new NotSupportedException("UIElement doesn't implement MeasureCore. Inherit from FrameworkElement, which properly implements MeasureCore.");
 		}
 
 		public void Arrange(Rect finalRect)
@@ -119,27 +146,47 @@ namespace Windows.UI.Xaml
 				return;
 			}
 
-			if (!_isArrangeValid || finalRect != LayoutSlot)
+			if (_isArrangeValid && finalRect == LayoutSlot)
 			{
-				ShowVisual();
-
-				// We must store the updated slot before natively arranging the element,
-				// so the updated value can be read by indirect code that is being invoked on arrange.
-				// For instance, the EffectiveViewPort computation reads that value to detect slot changes (cf. PropagateEffectiveViewportChange)
-				LayoutInformation.SetLayoutSlot(this, finalRect);
-
-				ArrangeCore(finalRect);
-				_isArrangeValid = true;
+				return;
 			}
+
+			if (IsVisualTreeRoot)
+			{
+				try
+				{
+					_isLayoutingVisualTreeRoot = true;
+					DoArrange(finalRect);
+				}
+				finally
+				{
+					_isLayoutingVisualTreeRoot = false;
+				}
+			}
+			else
+			{
+				// If possible we avoid the try/finally which might be costly on some platforms
+				DoArrange(finalRect);
+			}
+		}
+
+		private void DoArrange(Rect finalRect)
+		{
+			ShowVisual();
+
+			// We must store the updated slot before natively arranging the element,
+			// so the updated value can be read by indirect code that is being invoked on arrange.
+			// For instance, the EffectiveViewPort computation reads that value to detect slot changes (cf. PropagateEffectiveViewportChange)
+			LayoutInformation.SetLayoutSlot(this, finalRect);
+
+			ArrangeCore(finalRect);
+			_isArrangeValid = true;
 		}
 
 		partial void HideVisual();
 		partial void ShowVisual();
 
-		internal virtual void MeasureCore(Size availableSize)
-		{
-			throw new NotSupportedException("UIElement doesn't implement MeasureCore. Inherit from FrameworkElement, which properly implements MeasureCore.");
-		}
+		
 
 		internal virtual void ArrangeCore(Rect finalRect)
 		{
@@ -151,6 +198,9 @@ namespace Windows.UI.Xaml
 			get => Visibility == Visibility.Collapsed ? new Size() : _size;
 			internal set
 			{
+				Debug.Assert(value.Width >= 0, "Invalid width");
+				Debug.Assert(value.Height >= 0, "Invalid height");
+
 				var previousSize = _size;
 				_size = value;
 

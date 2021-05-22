@@ -31,7 +31,7 @@ using ViewGroup = AppKit.NSView;
 using Color = AppKit.NSColor;
 using Font = AppKit.NSFont;
 using AppKit;
-#elif NETSTANDARD2_0 || NET461
+#elif UNO_REFERENCE_API || NET461
 using View = Windows.UI.Xaml.UIElement;
 #endif
 
@@ -54,6 +54,8 @@ namespace Windows.UI.Xaml.Controls
 		protected object DefaultStyleKey { get; set; }
 
 		protected override bool IsSimpleLayout => true;
+
+		internal override bool IsEnabledOverride() => IsEnabled && base.IsEnabledOverride();
 
 		internal override void UpdateThemeBindings()
 		{
@@ -539,7 +541,7 @@ namespace Windows.UI.Xaml.Controls
 				typeof(double),
 				typeof(Control),
 				new FrameworkPropertyMetadata(
-					15.0,
+					14.0,
 					FrameworkPropertyMetadataOptions.Inherits,
 					(s, e) => ((Control)s)?.OnFontSizeChanged((double)e.OldValue, (double)e.NewValue)
 				)
@@ -1133,5 +1135,28 @@ namespace Windows.UI.Xaml.Controls
 
 		public string[] CurrentVisualStates => VisualStateGroups.Select(vsg => vsg.CurrentState?.Name).ToArray();
 #endif
+
+		internal void ConditionallyGetTemplatePartAndUpdateVisibility<T>(
+			string strName,
+			bool visible,
+			ref T element) where T:UIElement
+        {
+            if (element == null && (visible /*|| !DXamlCore::GetCurrent()->GetHandle()->GetDeferredElementIfExists(strName, GetHandle(), Jupiter::NameScoping::NameScopeType::TemplateNameScope))*/))
+            {
+                // If element should be visible or is not deferred, then fetch it.
+				element = GetTemplateChild(strName) as T;
+			}
+
+            // If element was found then set its Visibility - this is behavior consistent with pre-Threshold releases.
+            if (element != null)
+            {
+                var spElementAsUIE = element as UIElement;
+
+                if (spElementAsUIE != null) 
+                {
+                    spElementAsUIE.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                }
+            }
+        }
 	}
 }

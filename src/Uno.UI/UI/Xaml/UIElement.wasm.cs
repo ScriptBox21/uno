@@ -128,9 +128,10 @@ namespace Windows.UI.Xaml
 
 				if (!_htmlTagCache.TryGetValue(currentType, out var htmlTagOverride))
 				{
-					htmlTagOverride = DefaultHtmlTag;
+					// Set the tag from the internal explicit UIElement parameter
+					htmlTagOverride = htmlTag;
 
-					if (currentType.GetCustomAttribute(_htmlElementAttribute) is Attribute attr)
+					if (currentType.GetCustomAttribute(_htmlElementAttribute, true) is Attribute attr)
 					{
 						_htmlTagCache[currentType] = htmlTagOverride = _htmlTagAttributeTagGetter.GetValue(attr, Array.Empty<object>()) as string;
 					}
@@ -252,6 +253,12 @@ namespace Windows.UI.Xaml
 			if (FeatureConfiguration.UIElement.AssignDOMXamlProperties)
 			{
 				UpdateDOMXamlProperty(nameof(LayoutSlotWithMarginsAndAlignments), LayoutSlotWithMarginsAndAlignments);
+			}
+
+			if (Visibility == Visibility.Collapsed)
+			{
+				// cf. OnVisibilityChanged
+				rect.X = rect.Y = -100000;
 			}
 
 			Uno.UI.Xaml.WindowManagerInterop.ArrangeElement(HtmlId, rect, clipRect);
@@ -408,14 +415,7 @@ namespace Windows.UI.Xaml
 			InvalidateMeasure();
 			UpdateHitTest();
 
-			if (newVisibility == Visibility.Visible)
-			{
-				ResetStyle("visibility");
-			}
-			else
-			{
-				SetStyle("visibility", "hidden");
-			}
+			WindowManagerInterop.SetVisibility(HtmlId, newVisibility == Visibility.Visible);
 
 			if (FeatureConfiguration.UIElement.AssignDOMXamlProperties)
 			{
@@ -456,8 +456,6 @@ namespace Windows.UI.Xaml
 
 			return base.ToString();
 		}
-
-		internal virtual bool IsEnabledOverride() => true;
 
 		public UIElement FindFirstChild() => _children.FirstOrDefault();
 

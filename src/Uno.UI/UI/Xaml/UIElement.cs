@@ -25,6 +25,7 @@ using Windows.UI.Xaml.Markup;
 using Microsoft.Extensions.Logging;
 using Windows.UI.Xaml.Controls.Primitives;
 using Windows.UI.Core;
+using System.Text;
 
 #if __IOS__
 using UIKit;
@@ -52,9 +53,26 @@ namespace Windows.UI.Xaml
 		/// </summary>
 		internal bool IsWindowRoot { get; set; }
 
+		/// <summary>
+		/// Is this view the top of the managed visual tree
+		/// </summary>
+		internal bool IsVisualTreeRoot { get; set; }
+
 		private void Initialize()
 		{
-			this.SetValue(KeyboardAcceleratorsProperty, new List<KeyboardAccelerator>(0), DependencyPropertyValuePrecedences.DefaultValue);
+			this.RegisterDefaultValueProvider(OnGetDefaultValue);
+		}
+
+		private bool OnGetDefaultValue(DependencyProperty property, out object defaultValue)
+		{
+			if (property == KeyboardAcceleratorsProperty)
+			{
+				defaultValue = new List<KeyboardAccelerator>(0);
+				return true;
+			}
+
+			defaultValue = null;
+			return false;
 		}
 
 		public Vector2 ActualSize => new Vector2((float)GetActualWidth(), (float)GetActualHeight());
@@ -187,12 +205,15 @@ namespace Windows.UI.Xaml
 
 		internal static Matrix3x2 GetTransform(UIElement from, UIElement to)
 		{
+			var logInfoString = from.Log().IsEnabled(LogLevel.Information) ? new StringBuilder() : null;
+			logInfoString?.Append($"{nameof(GetTransform)}(from: {from}, to: {to?.ToString() ?? "<null>"}) Offsets: [");
+
 			if (from == to)
 			{
 				return Matrix3x2.Identity;
 			}
 
-#if NETSTANDARD // Depth is defined properly only on WASM and Skia
+#if UNO_REFERENCE_API // Depth is defined properly only on WASM and Skia
 			// If possible we try to navigate the tree upward so we have a greater chance
 			// to find an element in the parent hierarchy of the other element.
 			if (to is { } && from.Depth < to.Depth)
@@ -230,7 +251,7 @@ namespace Windows.UI.Xaml
 					offsetY = layoutSlot.Y;
 				}
 
-#if !__SKIA__
+#if !UNO_HAS_MANAGED_SCROLL_PRESENTER
 				// On Skia, the Scrolling is managed by the ScrollContentPresenter (as UWP), which is flagged as IsScrollPort.
 				// Note: We should still add support for the zoom factor ... which is not yet supported on Skia.
 				if (elt is ScrollViewer sv)
@@ -252,12 +273,15 @@ namespace Windows.UI.Xaml
 				}
 				else
 #endif
+#if !__MACOS__ // On macOS the SCP is using RenderTransforms for scrolling which has already been included.
 				if (elt.IsScrollPort) // Custom scroller
 				{
 					offsetX -= elt.ScrollOffsets.X;
 					offsetY -= elt.ScrollOffsets.Y;
 				}
+#endif
 
+				logInfoString?.Append($"{elt}: ({offsetX}, {offsetY}), ");
 			} while (elt.TryGetParentUIElementForTransformToVisual(out elt, ref offsetX, ref offsetY) && elt != to); // If possible we stop as soon as we reach 'to'
 
 			matrix *= Matrix3x2.CreateTranslation((float)offsetX, (float)offsetY);
@@ -273,10 +297,15 @@ namespace Windows.UI.Xaml
 				matrix *= rootToTo;
 			}
 
+			if (logInfoString != null)
+			{
+				logInfoString.Append($"], matrix: {matrix}");
+				from.Log().LogInformation(logInfoString.ToString());
+			}
 			return matrix;
 		}
 
-#if !__IOS__ && !__ANDROID__ // This is the default implementation, but it can be customized per platform
+#if !__IOS__ && !__ANDROID__ && !__MACOS__ // This is the default implementation, but it can be customized per platform
 		/// <summary>
 		/// Note: Offsets are only an approximation which does not take in consideration possible transformations
 		///	applied by a 'UIView' between this element and its parent UIElement.
@@ -341,13 +370,26 @@ namespace Windows.UI.Xaml
 		internal bool IsRenderingSuspended { get; set; }
 
 		[ThreadStatic]
-		private static bool _isInUpdateLayout;
+		private static bool _isInUpdateLayout; // Currently within the UpdateLayout() method (explicit managed layout request)
+
+#pragma warning disable CS0649 // Field not used on Desktop/Tests
+		[ThreadStatic]
+		private static bool _isLayoutingVisualTreeRoot; // Currently in Measure or Arrange of the element flagged with IsVisualTreeRoot (layout requested by the system)
+#pragma warning restore CS0649
+
+#if !__NETSTD__ // We need an internal accessor for the Layouter
+		internal static bool IsLayoutingVisualTreeRoot
+		{
+			get => _isLayoutingVisualTreeRoot;
+			set => _isLayoutingVisualTreeRoot = value;
+		}
+#endif
 
 		private const int MaxLayoutIterations = 250;
 
 		public void UpdateLayout()
 		{
-			if (_isInUpdateLayout)
+			if (_isInUpdateLayout || _isLayoutingVisualTreeRoot)
 			{
 				return;
 			}
@@ -429,7 +471,7 @@ namespace Windows.UI.Xaml
 
 				if (NeedsClipToSlot)
 				{
-#if NETSTANDARD
+#if UNO_REFERENCE_API
 					rect = new Rect(0, 0, RenderSize.Width, RenderSize.Height);
 #else
 					rect = ClippedFrame ?? Rect.Empty;
@@ -533,7 +575,7 @@ namespace Windows.UI.Xaml
 		/// </summary>
 		Size IUIElement.DesiredSize { get; set; }
 
-#if !NETSTANDARD
+#if !UNO_REFERENCE_API
 		/// <summary>
 		/// Provides the size reported during the last call to Measure.
 		/// </summary>
@@ -551,7 +593,7 @@ namespace Windows.UI.Xaml
 		{
 		}
 
-#if !NETSTANDARD
+#if !UNO_REFERENCE_API
 		/// <summary>
 		/// This is the Frame that should be used as "available Size" for the Arrange phase.
 		/// </summary>
@@ -609,6 +651,17 @@ namespace Windows.UI.Xaml
 		}
 
 		internal virtual bool IsViewHit() => true;
+
+		internal virtual bool IsEnabledOverride() => true;
+
+		internal bool GetUseLayoutRounding()
+		{
+#if __SKIA__
+			return true;
+#else
+			return false;
+#endif
+		}
 
 		internal double LayoutRound(double value)
 		{
@@ -706,17 +759,19 @@ namespace Windows.UI.Xaml
 
 		// GetScaleFactorForLayoutRounding() returns the plateau scale in most cases. For ScrollContentPresenter children though,
 		// the plateau scale gets combined with the owning ScrollViewer's ZoomFactor if headers are present.
-		private double GetScaleFactorForLayoutRounding()
+		internal double GetScaleFactorForLayoutRounding()
 		{
 			// TODO use actual scaling based on current transforms.
 			return global::Windows.Graphics.Display.DisplayInformation.GetForCurrentView().LogicalDpi / 96.0f; // 100%
 		}
 
-		int XcpRound(double x)
-			=> (int)Math.Floor(x + 0.5);
+		double XcpRound(double x)
+		{
+			return Math.Round(x);
+		}
 
 #if HAS_UNO_WINUI
-		#region FocusState DependencyProperty
+#region FocusState DependencyProperty
 
 		public FocusState FocusState
 		{
@@ -734,9 +789,9 @@ namespace Windows.UI.Xaml
 				)
 			);
 
-		#endregion
+#endregion
 
-		#region IsTabStop DependencyProperty
+#region IsTabStop DependencyProperty
 
 		public bool IsTabStop
 		{
@@ -754,101 +809,9 @@ namespace Windows.UI.Xaml
 					(s, e) => ((Control)s)?.OnIsTabStopChanged((bool)e.OldValue, (bool)e.NewValue)
 				)
 			);
-		#endregion
+#endregion
 
 		private protected virtual void OnIsTabStopChanged(bool oldValue, bool newValue) { }
-#endif
-
-#if DEBUG
-		/// <summary>
-		/// A helper method while debugging to get the theme resource, if any, assigned to <paramref name="propertyName"/>.
-		/// </summary>
-		internal string GetThemeSource(string propertyName)
-		{
-			if (!propertyName.EndsWith("Property"))
-			{
-				propertyName += "Property";
-			}
-			var propInfo = GetType().GetTypeInfo().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-			var dp = propInfo.GetValue(null) as DependencyProperty;
-			var bindings = (this as IDependencyObjectStoreProvider).Store.GetResourceBindingsForProperty(dp);
-			if (bindings.Any())
-			{
-				var output = "";
-				foreach (var binding in bindings)
-				{
-					output += $"{binding.ResourceKey} ({binding.Precedence}), ";
-				}
-
-				return output;
-			}
-			else
-			{
-				return "[None]";
-			}
-		}
-
-		/// <summary>
-		/// Lists all resource keys associated with <paramref name="resource"/>, both in local code and the framework. This is spectacularly
-		/// inefficient and only useful for providing extra information while debugging.
-		/// </summary>
-		/// <remarks>
-		/// Currently won't work with value-typed resources (eg double, Thickness) since it uses ReferencEquals() and they will be boxed.
-		/// </remarks>
-		internal object[] GetKeysForResource(object resource)
-		{
-			return Inner().ToArray();
-
-			IEnumerable<object> Inner()
-			{
-				var fe = this as FrameworkElement;
-				while (fe != null)
-				{
-					foreach (var key in TryFindResource(fe.Resources))
-					{
-						yield return key;
-					}
-
-					fe = fe.Parent as FrameworkElement;
-				}
-
-				foreach (var key in TryFindResource(Application.Current.Resources))
-				{
-					yield return key;
-				}
-				foreach (var key in TryFindResource(Uno.UI.GlobalStaticResources.MasterDictionary))
-				{
-					yield return key;
-				}
-
-				IEnumerable<object> TryFindResource(ResourceDictionary resourceDictionary)
-				{
-					foreach (var kvp in resourceDictionary)
-					{
-						if (ReferenceEquals(resource, kvp.Value)) // TODO: doesn't work for value types
-						{
-							yield return kvp.Key;
-						}
-					}
-
-					foreach (var mergedDict in resourceDictionary.MergedDictionaries)
-					{
-						foreach (var key in TryFindResource(mergedDict))
-						{
-							yield return key;
-						}
-					}
-
-					foreach (var themeDict in resourceDictionary.ThemeDictionaries.Values.OfType<ResourceDictionary>())
-					{
-						foreach (var key in TryFindResource(themeDict))
-						{
-							yield return key;
-						}
-					}
-				}
-			}
-		}
 #endif
 	}
 }

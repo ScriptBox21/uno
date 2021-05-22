@@ -28,6 +28,7 @@ namespace Uno.UI {
 
 		private static readonly unoRootClassName = "uno-root-element";
 		private static readonly unoUnarrangedClassName = "uno-unarranged";
+		private static readonly unoCollapsedClassName = "uno-visibility-collapsed";
 
 		private static _cctor = (() => {
 			WindowManager.initMethods();
@@ -258,7 +259,7 @@ namespace Uno.UI {
 			element.setAttribute("XamlType", uiElementRegistration.typeName);
 			element.setAttribute("XamlHandle", this.handleToString(contentDefinition.handle));
 			if (uiElementRegistration.isFrameworkElement) {
-				this.setAsUnarranged(element);
+				this.setAsUnarranged(element, true);
 			}
 			if (element.hasOwnProperty("tabindex")) {
 				(element as any)["tabindex"] = contentDefinition.isFocusable ? 0 : -1;
@@ -362,6 +363,31 @@ namespace Uno.UI {
 
 		private setXUidInternal(elementId: number, name: string): void {
 			this.getView(elementId).setAttribute("xuid", name);
+		}
+
+		/**
+			* Sets the visibility of the specified element
+			*/
+		public setVisibility(elementId: number, visible: boolean): string {
+			this.setVisibilityInternal(elementId, visible);
+			return "ok";
+		}
+
+		public setVisibilityNative(pParam: number): boolean {
+			const params = WindowManagerSetVisibilityParams.unmarshal(pParam);
+			this.setVisibilityInternal(params.HtmlId, params.Visible);
+			return true;
+		}
+
+		private setVisibilityInternal(elementId: number, visible: boolean): void {
+			const element = this.getView(elementId);
+
+			if (visible) {
+				element.classList.remove(WindowManager.unoCollapsedClassName);
+			}
+			else {
+				element.classList.add(WindowManager.unoCollapsedClassName);
+			}
 		}
 
 		/**
@@ -666,11 +692,83 @@ namespace Uno.UI {
 
 		private setAsArranged(element: HTMLElement | SVGElement) {
 
-			element.classList.remove(WindowManager.unoUnarrangedClassName);
+			if (!(<any>element)._unoIsArranged) {
+				(<any>element)._unoIsArranged = true;
+				element.classList.remove(WindowManager.unoUnarrangedClassName);
+			}
 		}
 
-		private setAsUnarranged(element: HTMLElement | SVGElement) {
-			element.classList.add(WindowManager.unoUnarrangedClassName);
+		private setAsUnarranged(element: HTMLElement | SVGElement, force: boolean = false) {
+			if ((<any>element)._unoIsArranged || force) {
+				(<any>element)._unoIsArranged = false;
+				element.classList.add(WindowManager.unoUnarrangedClassName);
+			}
+		}
+
+		/**
+		* Sets the color property of the specified element
+		*/
+		public setElementColor(elementId: number, color: number): string {
+			this.setElementColorInternal(elementId, color);
+			return "ok";
+		}
+
+		public setElementColorNative(pParam: number): boolean {
+			const params = WindowManagerSetElementColorParams.unmarshal(pParam);
+			this.setElementColorInternal(params.HtmlId, params.Color);
+			return true;
+		}
+
+		private setElementColorInternal(elementId: number, color: number): void {
+			const element = this.getView(elementId);
+
+			element.style.setProperty("color", this.numberToCssColor(color));
+		}
+
+		/**
+		* Sets the background color property of the specified element
+		*/
+		public setElementBackgroundColor(pParam: number): boolean {
+			const params = WindowManagerSetElementBackgroundColorParams.unmarshal(pParam);
+
+			const element = this.getView(params.HtmlId);
+			const style = element.style;
+
+			style.setProperty("background-color", this.numberToCssColor(params.Color));
+			style.removeProperty("background-image");
+
+			return true;
+		}
+
+		/**
+		* Sets the background image property of the specified element
+		*/
+		public setElementBackgroundGradient(pParam: number): boolean {
+			const params = WindowManagerSetElementBackgroundGradientParams.unmarshal(pParam);
+
+			const element = this.getView(params.HtmlId);
+			const style = element.style;
+
+			style.removeProperty("background-color");
+			style.setProperty("background-image", params.CssGradient);
+
+			return true;
+		}
+
+		/**
+		* Clears the background property of the specified element
+		*/
+		public resetElementBackground(pParam: number): boolean {
+			const params = WindowManagerResetElementBackgroundParams.unmarshal(pParam);
+
+			const element = this.getView(params.HtmlId);
+			const style = element.style;
+
+			style.removeProperty("background-color");
+			style.removeProperty("background-image");
+			style.removeProperty("background-size");
+
+			return true;
 		}
 
 		/**
@@ -1450,7 +1548,6 @@ namespace Uno.UI {
 					// Create a temporary element that will contain the input's content
 					var textOnlyElement = document.createElement("p") as HTMLParagraphElement;
 					textOnlyElement.style.cssText = unconstrainedStyleCssText;
-					textOnlyElement.style.whiteSpace = "pre"; // Make sure to preserve space for measure, especially the ending new line!
 
 					// If the input is null or empty, add a no-width character to force the paragraph to take up one line height
 					// The trailing new lines are going to be ignored for measure, so we also append no-width char at the end.
@@ -1878,6 +1975,10 @@ namespace Uno.UI {
 			return handle + "";
 		}
 
+		private numberToCssColor(color: number): string {
+			return "#" + color.toString(16).padStart(8, '0');
+		}
+
 		public setCursor(cssCursor: string): string {
 			const unoBody = document.getElementById(this.containerElementId);
 
@@ -1903,6 +2004,31 @@ namespace Uno.UI {
 			}
 			return "ok";
 		}
+
+		public getNaturalImageSize(imageUrl: string): Promise<string> {
+			return new Promise<string>((resolve, reject) => {
+				const img = new Image();
+
+				let loadingDone = () => {
+					this.containerElement.removeChild(img);
+					resolve(`${img.width};${img.height}`);
+				};
+				let loadingError = (e: Event) => {
+					this.containerElement.removeChild(img);
+					reject(e);
+				}
+
+				img.style.pointerEvents = "none";
+				img.style.opacity = "0";
+				img.onload = loadingDone;
+				img.onerror = loadingError;
+				img.src = imageUrl;
+
+				this.containerElement.appendChild(img);
+
+			});
+		}
+
 	}
 
 	if (typeof define === "function") {

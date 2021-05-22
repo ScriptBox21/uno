@@ -39,6 +39,8 @@ namespace Windows.UI.Xaml
 			}
 		}
 
+		internal Canvas FocusVisualLayer { get; private set; }
+
 		public UIElement Content
 		{
 			get => InternalGetContent();
@@ -75,6 +77,7 @@ namespace Windows.UI.Xaml
 		/// but also the PopupRoot, the DragRoot and all other internal UI elements.
 		/// On platforms like iOS and Android, we might still have few native controls above this.
 		/// </summary>
+		/// <remarks>This element is flagged with IsVisualTreeRoot.</remarks>
 		internal UIElement RootElement => InternalGetRootElement();
 
 		public Rect Bounds { get; private set; }

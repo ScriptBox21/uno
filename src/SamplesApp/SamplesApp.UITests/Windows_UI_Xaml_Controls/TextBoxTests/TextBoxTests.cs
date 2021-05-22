@@ -14,7 +14,7 @@ using Uno.UITest.Helpers.Queries;
 namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 {
 	[TestFixture]
-	public class TextBoxTests : SampleControlUITestBase
+	public partial class TextBoxTests : SampleControlUITestBase
 	{
 		[Test]
 		[AutoRetry]
@@ -155,9 +155,6 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 
 			_app.TapCoordinates(deleteButton1.Rect.CenterX, deleteButton1.Rect.CenterY);
 
-			// Second tap is required on Wasm https://github.com/unoplatform/uno/issues/2138
-			_app.TapCoordinates(deleteButton1.Rect.CenterX, deleteButton1.Rect.CenterY);
-
 			_app.WaitForText(textBox1, "");
 
 			// Focus the first textbox
@@ -165,9 +162,6 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 
 			var deleteButton2 = FindDeleteButton(textBox2Result);
 
-			_app.TapCoordinates(deleteButton2.Rect.CenterX, deleteButton2.Rect.CenterY);
-
-			// Second tap is required on Wasm https://github.com/unoplatform/uno/issues/2138
 			_app.TapCoordinates(deleteButton2.Rect.CenterX, deleteButton2.Rect.CenterY);
 
 			_app.WaitForText(textBox2, "");
@@ -205,7 +199,7 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 			{
 				_app.EnterText("ERROR1");
 			}
-			catch(Exception e)
+			catch (Exception e)
 			{
 				// Ignore the exception for now.
 				Console.WriteLine(e);
@@ -225,7 +219,7 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 			{
 				_app.EnterText("ERROR2");
 			}
-			catch(Exception e)
+			catch (Exception e)
 			{
 				Console.WriteLine(e);
 			}
@@ -372,7 +366,7 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 		public void TextBox_TextAlignment_Left_Validation()
 		{
 			Run("Uno.UI.Samples.Content.UITests.TextBoxControl.TextBox_TextAlignment");
-			
+
 			var leftAlignedTextBox = _app.Marked("LeftAlignedTextBox");
 
 			// Assert initial text alignment, change text and assert final text alignment
@@ -631,5 +625,196 @@ namespace SamplesApp.UITests.Windows_UI_Xaml_Controls.TextBoxTests
 			Assert.AreEqual(text.ToUpperInvariant(), upperCasingTextBox.GetDependencyPropertyValue("Text")?.ToString());
 		}
 
+		[Test]
+		[AutoRetry]
+		public void TextBox_AutoGrow_Vertically_Test()
+		{
+			Run("Uno.UI.Samples.Content.UITests.TextBoxControl.Input_Multiline_AutoHeight");
+
+			_app.FastTap("btnSingle");
+			_app.WaitForElement("Test");
+			var height1 = _app.GetLogicalRect("Test").Height;
+
+			_app.FastTap("btnDouble");
+			_app.WaitForElement("Test");
+			var height2 = _app.GetLogicalRect("Test").Height;
+
+			using var _ = new AssertionScope();
+			height2.Should().BeGreaterThan(height1);
+
+
+			_app.FastTap("btnSingle");
+			_app.WaitForElement("Test");
+			var height3 = _app.GetLogicalRect("Test").Height;
+
+			height3.Should().Be(height1);
+		}
+
+		[Test]
+		[AutoRetry]
+		public void TextBox_AutoGrow_Vertically_Wrapping_Test()
+		{
+			Run("Uno.UI.Samples.Content.UITests.TextBoxControl.Input_Multiline_AutoHeight");
+
+			_app.Marked("Test").SetDependencyPropertyValue("MaxWidth", "200");
+			_app.Marked("Test").SetDependencyPropertyValue("TextWrapping", "Wrap");
+			_app.Marked("Test").SetDependencyPropertyValue("Text", "Short");
+			_app.WaitForElement("Test");
+			var height1 = _app.GetLogicalRect("Test").Height;
+
+			_app.EnterText("Test", "This is a significantly longer text. It should wraps.");
+			_app.WaitForElement("Test");
+			var height2 = _app.GetLogicalRect("Test").Height;
+
+			using var _ = new AssertionScope();
+			height2.Should().BeGreaterThan(height1);
+
+
+			_app.Marked("Test").SetDependencyPropertyValue("Text", "Short");
+			var height3 = _app.GetLogicalRect("Test").Height;
+
+			height3.Should().Be(height1);
+		}
+
+		[Test]
+		[AutoRetry]
+		[ActivePlatforms(Platform.Browser)]
+		public void TextBox_AutoGrow_Vertically_NoWrapping_Test()
+		{
+			Run("Uno.UI.Samples.Content.UITests.TextBoxControl.Input_Multiline_AutoHeight");
+
+			_app.Marked("Test").SetDependencyPropertyValue("MaxWidth", "200");
+			_app.Marked("Test").SetDependencyPropertyValue("Text", "Short");
+			_app.WaitForElement("Test");
+			var height1 = _app.GetLogicalRect("Test").Height;
+
+			_app.EnterText("Test", "This is a significantly longer text. Since there's no wrapping, it should remains on a single line.");
+			_app.WaitForElement("Test");
+			var height2 = _app.GetLogicalRect("Test").Height;
+
+			height2.Should().Be(height1);
+		}
+
+		[Test]
+		[AutoRetry]
+		public void TextBox_AutoGrow_Horizontally_Test()
+		{
+			using var _ = new AssertionScope();
+
+			Run("Uno.UI.Samples.Content.UITests.TextBoxControl.Input_Multiline_AutoHeight");
+
+			_app.Marked("Test").SetDependencyPropertyValue("MinWidth", "120");
+			_app.Marked("Test").SetDependencyPropertyValue("HorizontalAlignment", "Left");
+			_app.Marked("Test").SetDependencyPropertyValue("Text", "Short");
+
+			_app.WaitForElement("Test");
+			var width1 = _app.GetLogicalRect("Test").Width;
+			var height1 = _app.GetLogicalRect("Test").Height;
+
+			width1.Should().Be(120f);
+
+
+			_app.EnterText("Test", "This is a significantly larger text. Since there's no wrapping, it should remains on a single line.");
+			_app.WaitForElement("Test");
+			var width2 = _app.GetLogicalRect("Test").Width;
+			var height2 = _app.GetLogicalRect("Test").Height;
+
+			width2.Should().BeGreaterThan(width1);
+			height2.Should().Be(height1);
+
+			_app.Marked("Test").SetDependencyPropertyValue("Text", "Short");
+			_app.WaitForElement("Test");
+			var width3 = _app.GetLogicalRect("Test").Width;
+			var height3 = _app.GetLogicalRect("Test").Height;
+
+			width1.Should().Be(width1);
+			height3.Should().Be(height1);
+		}
+
+		[Test]
+		[AutoRetry]
+		public void PasswordBox_AutoGrow_Horizontally_Test()
+		{
+			using var _ = new AssertionScope();
+
+			Run("Uno.UI.Samples.Content.UITests.TextBoxControl.PasswordBox_Simple");
+
+			_app.Marked("autoGrow").SetDependencyPropertyValue("MinWidth", "120");
+			_app.Marked("autoGrow").SetDependencyPropertyValue("HorizontalAlignment", "Left");
+			_app.Marked("autoGrow").SetDependencyPropertyValue("Password", "");
+
+			_app.WaitForElement("autoGrow");
+			var width1 = _app.GetLogicalRect("autoGrow").Width;
+			var height1 = _app.GetLogicalRect("autoGrow").Height;
+
+			width1.Should().Be(120f);
+
+
+			_app.EnterText("autoGrow", "This is a long password.");
+			_app.WaitForElement("autoGrow");
+			var width2 = _app.GetLogicalRect("autoGrow").Width;
+			var height2 = _app.GetLogicalRect("autoGrow").Height;
+
+			width2.Should().BeGreaterThan(width1);
+			height2.Should().Be(height1);
+
+			_app.Marked("autoGrow").SetDependencyPropertyValue("Password", "short");
+			_app.WaitForElement("autoGrow");
+			var width3 = _app.GetLogicalRect("autoGrow").Width;
+			var height3 = _app.GetLogicalRect("autoGrow").Height;
+
+			width3.Should().Be(width1);
+			height3.Should().Be(height1);
+		}
+
+		[Test]
+		[AutoRetry]
+		public void TextBox_Foreground_Color_Changing()
+		{
+			Run("UITests.Windows_UI_Xaml_Controls.TextBox.TextBox_Foreground_Changing");
+
+			_app.WaitForElement("DummyButton");
+			_app.FastTap("DummyButton"); // Ensure pointer is out of the way and mouse-over states aren't accidentally active
+
+			const string SingleLine = "SingleLineTextBox";
+			const string Multiline = "MultilineTextBox";
+
+			using var initial = TakeScreenshot("Initial");
+
+			PointF GetPixelPosition(string textBoxName)
+			{
+				var rect = _app.GetPhysicalRect(textBoxName);
+				var firstPosition = GetPixelPositionWithColor(initial, rect, Color.Tomato);
+				return new PointF(firstPosition.X + 5, firstPosition.Y + 5);
+			}
+			var singleLinePosition = GetPixelPosition(SingleLine);
+			var multilinePosition = GetPixelPosition(Multiline);
+
+			_app.FastTap("ChangeForegroundButton");
+			_app.WaitForText("StatusTextBlock", "Changed");
+
+			using var after = TakeScreenshot("Foreground Color changed");
+
+			ImageAssert.HasColorAt(after, singleLinePosition.X, singleLinePosition.Y, Color.Blue);
+			ImageAssert.HasColorAt(after, multilinePosition.X, multilinePosition.Y, Color.Blue);
+		}
+
+		private static PointF GetPixelPositionWithColor(ScreenshotInfo screenshotInfo, IAppRect boundingRect, Color expectedColor)
+		{
+			var bitmap = screenshotInfo.GetBitmap();
+			for (var x = boundingRect.X; x < boundingRect.Right; x++)
+			{
+				for (var y = boundingRect.Y; y < boundingRect.Bottom; y++)
+				{
+					var pixel = bitmap.GetPixel((int)x, (int)y);
+					if (pixel.ToArgb() == expectedColor.ToArgb())
+					{
+						return new PointF(x, y);
+					}
+				}
+			}
+
+			throw new InvalidOperationException($"Color {expectedColor} was not found.");
+		}
 	}
 }

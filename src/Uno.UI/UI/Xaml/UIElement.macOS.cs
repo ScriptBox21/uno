@@ -4,6 +4,8 @@ using Windows.UI.Xaml.Input;
 using Windows.System;
 using System;
 using System.Linq;
+using Windows.UI.Xaml;
+using Windows.UI.Xaml.Controls;
 using Uno.UI.Extensions;
 using AppKit;
 using CoreAnimation;
@@ -48,7 +50,7 @@ namespace Windows.UI.Xaml
 			if (base.Hidden != newVisibility.IsHidden())
 			{
 				base.Hidden = newVisibility.IsHidden();
-				base.NeedsLayout = true;			
+				base.NeedsLayout = true;
 
 				if (newVisibility == Visibility.Visible)
 				{
@@ -65,8 +67,8 @@ namespace Windows.UI.Xaml
 			get => base.Hidden;
 			set
 			{
-				// Only set the Visility property, the Hidden property is updated 
-				// in the property changed handler as there are actions associated with 
+				// Only set the Visility property, the Hidden property is updated
+				// in the property changed handler as there are actions associated with
 				// the change.
 				Visibility = value ? Visibility.Collapsed : Visibility.Visible;
 			}
@@ -103,12 +105,8 @@ namespace Windows.UI.Xaml
 #endif
 		}
 
-#if DEBUG
-		public string ShowLocalVisualTree(int fromHeight) => AppKit.UIViewExtensions.ShowLocalVisualTree(this, fromHeight);
-#endif
-
 		/// <inheritdoc />
-		public override bool AcceptsFirstResponder() 
+		public override bool AcceptsFirstResponder()
 			=> true; // This is required to receive the KeyDown / KeyUp. Note: Key events are then bubble in managed.
 
 		private protected override void OnNativeKeyDown(NSEvent evt)
@@ -121,6 +119,54 @@ namespace Windows.UI.Xaml
 			RaiseEvent(KeyDownEvent, args);
 
 			base.OnNativeKeyDown(evt);
+		}
+
+		private bool TryGetParentUIElementForTransformToVisual(out UIElement parentElement, ref double offsetX, ref double offsetY)
+		{
+			var parent = this.GetVisualTreeParent();
+			switch (parent)
+			{
+				// First we try the direct parent, if it's from the known type we won't even have to adjust offsets
+
+				case UIElement elt:
+					parentElement = elt;
+					return true;
+
+				case null:
+					parentElement = null;
+					return false;
+
+				case NSView view:
+					do
+					{
+						parent = parent?.GetVisualTreeParent();
+
+						switch (parent)
+						{
+							case UIElement eltParent:
+								// We found a UIElement in the parent hierarchy, we compute the X/Y offset between the
+								// first parent 'view' and this 'elt', and return it.
+
+								var offset = view?.ConvertPointToView(default, eltParent) ?? default;
+
+								parentElement = eltParent;
+								offsetX += offset.X;
+								offsetY += offset.Y;
+								return true;
+
+							case null:
+								// We reached the top of the window without any UIElement in the hierarchy,
+								// so we adjust offsets using the X/Y position of the original 'view' in the window.
+
+								offset = view.ConvertRectToView(default, null).Location;
+
+								parentElement = null;
+								offsetX += offset.X;
+								offsetY += offset.Y;
+								return false;
+						}
+					} while (true);
+			}
 		}
 
 		private protected override void OnNativeKeyUp(NSEvent evt)
@@ -156,7 +202,7 @@ namespace Windows.UI.Xaml
 
 			WantsLayer = true;
 			if (Layer != null)
-			{ 
+			{
 				this.Layer.Mask = new CAShapeLayer
 				{
 					Path = CGPath.FromRect(rect.ToCGRect())

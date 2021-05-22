@@ -12,6 +12,7 @@ using Windows.UI.Core;
 
 using ICommand = System.Windows.Input.ICommand;
 using EventHandler = System.EventHandler;
+using Windows.UI.Xaml;
 
 namespace Uno.UI.Samples.UITests.Helpers
 {
@@ -25,6 +26,10 @@ namespace Uno.UI.Samples.UITests.Helpers
 		protected readonly CompositeDisposable Disposables = new CompositeDisposable();
 		protected readonly CancellationToken CT;
 
+		public ViewModelBase() : this(CoreWindow.GetForCurrentThread().Dispatcher)
+		{
+		}
+
 		public ViewModelBase(CoreDispatcher dispatcher)
 		{
 			Dispatcher = dispatcher;
@@ -33,6 +38,15 @@ namespace Uno.UI.Samples.UITests.Helpers
 			CT = cts.Token;
 
 			Disposables.Add(Disposable.Create(() => cts.Cancel()));
+		}
+
+		protected void Set<T>(ref T backingField, T value, [CallerMemberName] string propertyName = "")
+		{
+			if (!Equals(backingField, value))
+			{
+				backingField = value;
+				RaisePropertyChanged(propertyName);
+			}
 		}
 
 		protected void RaisePropertyChanged([CallerMemberName] string propertyName = "")

@@ -24,12 +24,11 @@ namespace Uno.UI.SourceGenerators.DependencyObject
 	{
 		public void Initialize(GeneratorInitializationContext context)
 		{
+			DependenciesInitializer.Init();
 		}
 
 		public void Execute(GeneratorExecutionContext context)
 		{
-			DependenciesInitializer.Init(context);
-
 			if (PlatformHelper.IsValidPlatform(context))
 			{
 				var visitor = new SerializationMethodsGenerator(context);
@@ -181,6 +180,12 @@ namespace Uno.UI.SourceGenerators.DependencyObject
 				if (getMethodSymbol == null)
 				{
 					builder.AppendLineInvariant($"#error unable to find getter method for {propertyName} on {ownerType}");
+					return;
+				}
+
+				if (setMethodSymbol == null)
+				{
+					builder.AppendLineInvariant($"#error unable to find setter method for {propertyName} on {ownerType}");
 					return;
 				}
 

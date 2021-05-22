@@ -1,3 +1,5 @@
+#nullable enable
+
 using Microsoft.CodeAnalysis;
 using System;
 using System.Collections.Generic;
@@ -23,12 +25,11 @@ namespace Uno.UI.SourceGenerators.RemoteControl
 	{
 		public void Initialize(GeneratorInitializationContext context)
 		{
+			DependenciesInitializer.Init();
 		}
 
 		public void Execute(GeneratorExecutionContext context)
 		{
-			DependenciesInitializer.Init(context);
-
 			if (
 				!DesignTimeHelper.IsDesignTime(context)
 				&& context.GetMSBuildPropertyValue("Configuration") == "Debug"
@@ -50,9 +51,17 @@ namespace Uno.UI.SourceGenerators.RemoteControl
 
 				BuildEndPointAttribute(context, sb);
 				BuildSearchPaths(context, sb);
+				BuildServerProcessorsPaths(context, sb);
 
 				context.AddSource("RemoteControl", sb.ToString());
 			}
+		}
+
+		private void BuildServerProcessorsPaths(GeneratorExecutionContext context, IndentedStringBuilder sb)
+		{
+			sb.AppendLineInvariant($"[assembly: global::Uno.UI.RemoteControl.ServerProcessorsConfigurationAttribute(" +
+				$"@\"{context.GetMSBuildPropertyValue("UnoRemoteControlProcessorsPath")}\"" +
+				$")]");
 		}
 
 		private static bool IsRemoteControlClientInstalled(GeneratorExecutionContext context)
@@ -80,7 +89,7 @@ namespace Uno.UI.SourceGenerators.RemoteControl
 
 			var distictPaths = string.Join(",\n", xamlPaths.Distinct().Select(p => $"@\"{p}\""));
 
-			sb.AppendLineInvariant("{0}", $"new[]{{{distictPaths}}}");
+			sb.AppendLineInvariant("{0}", $"new string[]{{{distictPaths}}}");
 
 			sb.AppendLineInvariant($")]");
 		}
