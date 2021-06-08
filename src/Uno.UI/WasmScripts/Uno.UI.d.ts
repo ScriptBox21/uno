@@ -52,6 +52,14 @@ declare namespace Uno.UI {
         private static isConnectedPolyfill;
     }
 }
+declare module Uno.UI {
+    enum HtmlEventDispatchResult {
+        Ok = 0,
+        StopPropagation = 1,
+        PreventDefault = 2,
+        NotDispatched = 128
+    }
+}
 declare namespace Uno.Http {
     interface IHttpClientConfig {
         id: string;
@@ -1116,8 +1124,10 @@ declare namespace Windows.UI.ViewManagement {
 declare namespace Windows.UI.Xaml {
     class Application {
         private static dispatchThemeChange;
+        private static dispatchVisibilityChange;
         static getDefaultSystemTheme(): string;
         static observeSystemTheme(): void;
+        static observeVisibility(): void;
     }
 }
 declare namespace Windows.UI.Xaml {

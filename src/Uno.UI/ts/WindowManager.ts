@@ -892,9 +892,12 @@ namespace Uno.UI {
 
 		public static dispatchPointerEvent(element: HTMLElement | SVGElement, evt: PointerEvent): void {
 			const payload = WindowManager.pointerEventExtractor(evt);
-			const handled = WindowManager.current.dispatchEvent(element, evt.type, payload);
-			if (handled) {
+			const result = WindowManager.current.dispatchEvent(element, evt.type, payload);
+			if (result & HtmlEventDispatchResult.StopPropagation) {
 				evt.stopPropagation();
+			}
+			if (result & HtmlEventDispatchResult.PreventDefault) {
+				evt.preventDefault();
 			}
 		}
 
@@ -1025,9 +1028,12 @@ namespace Uno.UI {
 					? `${eventExtractor(event)}`
 					: "";
 
-				var handled = this.dispatchEvent(element, eventName, eventPayload);
-				if (handled) {
+				const result = this.dispatchEvent(element, eventName, eventPayload);
+				if (result & HtmlEventDispatchResult.StopPropagation) {
 					event.stopPropagation();
+				}
+				if (result & HtmlEventDispatchResult.PreventDefault) {
+					event.preventDefault();
 				}
 			};
 
@@ -1939,7 +1945,7 @@ namespace Uno.UI {
 			}
 		}
 
-		private dispatchEvent(element: HTMLElement | SVGElement, eventName: string, eventPayload: string = null): boolean {
+		private dispatchEvent(element: HTMLElement | SVGElement, eventName: string, eventPayload: string = null): HtmlEventDispatchResult {
 			const htmlId = Number(element.getAttribute("XamlHandle"));
 
 			// console.debug(`${element.getAttribute("id")}: Raising event ${eventName}.`);
@@ -1953,7 +1959,7 @@ namespace Uno.UI {
 				// this way always succeed because synchronous calls are not possible
 				// between the host and the browser, unlike wasm.
 				UnoDispatch.dispatch(this.handleToString(htmlId), eventName, eventPayload);
-				return true;
+				return HtmlEventDispatchResult.Ok;
 			}
 			else {
 				return WindowManager.dispatchEventMethod(htmlId, eventName, eventPayload || "");
@@ -2033,7 +2039,7 @@ namespace Uno.UI {
 
 	if (typeof define === "function") {
 		define(
-			[`${config.uno_app_base}/AppManifest`],
+			[`./AppManifest.js`],
 			() => {
 			}
 		);

@@ -11,6 +11,7 @@ using Windows.ApplicationModel;
 using Uno.Helpers.Theming;
 using Windows.UI.ViewManagement;
 using Uno.Extensions;
+using Microsoft.Extensions.Logging;
 
 #if HAS_UNO_WINUI
 using LaunchActivatedEventArgs = Microsoft.UI.Xaml.LaunchActivatedEventArgs;
@@ -47,6 +48,7 @@ namespace Windows.UI.Xaml
 		private ApplicationTheme? _requestedTheme;
 		private bool _systemThemeChangesObserved = false;
 		private SpecializedResourceDictionary.ResourceKey _requestedThemeForResources;
+		private bool _isInBackground = false;
 
 		static Application()
 		{
@@ -165,13 +167,33 @@ namespace Windows.UI.Xaml
 		public ResourceDictionary Resources { get; set; } = new ResourceDictionary();
 
 #pragma warning disable CS0067 // The event is never used
+		/// <summary>
+		/// Occurs when the application transitions from Suspended state to Running state.
+		/// </summary>
 		public event EventHandler<object> Resuming;
 #pragma warning restore CS0067 // The event is never used
 
 #pragma warning disable CS0067 // The event is never used
+		/// <summary>
+		/// Occurs when the application transitions to Suspended state from some other state.
+		/// </summary>
 		public event SuspendingEventHandler Suspending;
 #pragma warning restore CS0067 // The event is never used
 
+		/// <summary>
+		/// Occurs when the app moves from the foreground to the background.
+		/// </summary>
+		public event EnteredBackgroundEventHandler EnteredBackground;
+
+		/// <summary>
+		/// Occurs when the app moves from the background to the foreground.
+		/// </summary>
+		public event LeavingBackgroundEventHandler LeavingBackground;
+
+		/// <summary>
+		/// Occurs when an exception can be handled by app code, as forwarded from a native-level Windows Runtime error.
+		/// Apps can mark the occurrence as handled in event data.
+		/// </summary>
 		public event UnhandledExceptionEventHandler UnhandledException;
 
 		public void OnSystemThemeChanged()
@@ -186,11 +208,14 @@ namespace Windows.UI.Xaml
 			UISettings.OnColorValuesChanged();
 		}
 
-#if !__ANDROID__ && !__MACOS__
+#if !__ANDROID__ && !__MACOS__ && !__SKIA__
 		[NotImplemented]
 		public void Exit()
 		{
-
+			if (this.Log().IsEnabled(LogLevel.Warning))
+			{
+				this.Log().LogWarning("This platform does not support application exit.");
+			}
 		}
 #endif
 
@@ -235,6 +260,24 @@ namespace Windows.UI.Xaml
 			else
 			{
 				return null;
+			}
+		}
+
+		internal void OnEnteredBackground()
+		{
+			if (!_isInBackground)
+			{
+				_isInBackground = true;
+				EnteredBackground?.Invoke(this, new EnteredBackgroundEventArgs());
+			}
+		}
+
+		internal void OnLeavingBackground()
+		{
+			if (_isInBackground)
+			{
+				_isInBackground = false;
+				LeavingBackground?.Invoke(this, new LeavingBackgroundEventArgs());
 			}
 		}
 

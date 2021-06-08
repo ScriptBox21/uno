@@ -18,10 +18,13 @@ using WinUI = Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
 using Uno.UI.Xaml.Controls.Extensions;
 using Uno.UI.Runtime.Skia.WPF.Extensions.UI.Xaml.Controls;
+using Uno.Extensions.System;
 using WpfApplication = System.Windows.Application;
 using WpfCanvas = System.Windows.Controls.Canvas;
 using WpfControl = System.Windows.Controls.Control;
 using WpfFrameworkPropertyMetadata = System.Windows.FrameworkPropertyMetadata;
+using Uno.UI.Xaml;
+using Uno.UI.Runtime.Skia.Wpf;
 
 namespace Uno.UI.Skia.Platform
 {
@@ -43,6 +46,7 @@ namespace Uno.UI.Skia.Platform
 			DefaultStyleKeyProperty.OverrideMetadata(typeof(WpfHost), new WpfFrameworkPropertyMetadata(typeof(WpfHost)));
 
 			ApiExtensibility.Register(typeof(Windows.UI.Core.ICoreWindowExtension), o => new WpfCoreWindowExtension(o));
+			ApiExtensibility.Register<Windows.UI.Xaml.Application>(typeof(IApplicationExtension), o => new WpfApplicationExtension(o));
 			ApiExtensibility.Register(typeof(Windows.UI.ViewManagement.IApplicationViewExtension), o => new WpfApplicationViewExtension(o));
 			ApiExtensibility.Register(typeof(ISystemThemeHelperExtension), o => new WpfSystemThemeHelperExtension(o));
 			ApiExtensibility.Register(typeof(IDisplayInformationExtension), o => new WpfDisplayInformationExtension(o));
@@ -50,6 +54,7 @@ namespace Uno.UI.Skia.Platform
 			ApiExtensibility.Register(typeof(IFileOpenPickerExtension), o => new FileOpenPickerExtension(o));
 			ApiExtensibility.Register(typeof(IFileSavePickerExtension), o => new FileSavePickerExtension(o));
 			ApiExtensibility.Register<TextBoxView>(typeof(ITextBoxViewExtension), o => new TextBoxViewExtension(o));
+			ApiExtensibility.Register(typeof(ILauncherExtension), o => new LauncherExtension(o));
 		}
 
 		public static WpfHost Current => _current;
@@ -108,6 +113,10 @@ namespace Uno.UI.Skia.Platform
 
 			WinUI.Window.InvalidateRender += () => InvalidateVisual();
 
+			WpfApplication.Current.Activated += Current_Activated;
+			WpfApplication.Current.Deactivated += Current_Deactivated;
+			WpfApplication.Current.MainWindow.StateChanged += MainWindow_StateChanged;
+
 			SizeChanged += WpfHost_SizeChanged;
 			Loaded += WpfHost_Loaded;
 		}
@@ -117,6 +126,32 @@ namespace Uno.UI.Skia.Platform
 			base.OnApplyTemplate();
 
 			_nativeOverlayLayer = GetTemplateChild(NativeOverlayLayerPart) as WpfCanvas;
+		}
+
+		private void MainWindow_StateChanged(object? sender, EventArgs e)
+		{
+			var wpfWindow = WpfApplication.Current.MainWindow;
+			var winUIWindow = WinUI.Window.Current;
+			var isVisible = wpfWindow.WindowState != WindowState.Minimized;
+			winUIWindow.OnVisibilityChanged(isVisible);
+		}
+
+		private void Current_Deactivated(object? sender, EventArgs e)
+		{
+			var winUIWindow = WinUI.Window.Current;
+			winUIWindow?.OnActivated(Windows.UI.Core.CoreWindowActivationState.Deactivated);
+
+			var application = WinUI.Application.Current;
+			application?.OnEnteredBackground();
+		}
+
+		private void Current_Activated(object? sender, EventArgs e)
+		{
+			var application = WinUI.Application.Current;
+			application?.OnLeavingBackground();
+
+			var winUIWindow = WinUI.Window.Current;
+			winUIWindow?.OnActivated(Windows.UI.Core.CoreWindowActivationState.CodeActivated);
 		}
 
 		private void WpfHost_Loaded(object sender, RoutedEventArgs e)
